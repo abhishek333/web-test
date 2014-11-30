@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	
+  	<property name="CONTEXT_NAME" value="web-test"/>  	
+  	
+	<appender name="consoleAppender" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level[%thread][%logger{36}] - %msg %n</Pattern>
+		</encoder>
+		<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+			<level>TRACE</level>
+		</filter>
+	</appender>
+
+	<logger name="org.asn" level="DEBUG" additivity="false">	    
+		<appender-ref ref="consoleAppender" />
+	</logger>
+	<logger name="org.springframework" level="OFF"/>
+	<root level="INFO">		
+		<appender-ref ref="consoleAppender" />
+	</root>
+</configuration>
