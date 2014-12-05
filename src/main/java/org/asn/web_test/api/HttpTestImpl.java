@@ -12,13 +12,20 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.CookieStore;
 import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.protocol.ClientContext;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HTTP;
+import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +45,7 @@ public class HttpTestImpl implements HttpTest {
 	private final String context;
 	private final int port;
 	private final ObjectMapper mapper = new ObjectMapper();
+	private final HttpContext httpContext;
 	
 	public HttpTestImpl() {
 		LOG.debug("HttpTestImpl instance created.");
@@ -52,6 +60,10 @@ public class HttpTestImpl implements HttpTest {
 		scheme = httpProperties.getProperty("scheme", "http");
 		context = httpProperties.getProperty("context", "appName");
 		port = Integer.parseInt(httpProperties.getProperty("port", "6060"));
+		
+		CookieStore cookieStore = new BasicCookieStore();
+		httpContext = new BasicHttpContext();
+		httpContext.setAttribute(ClientContext.COOKIE_STORE, cookieStore);
 	}
 
 	/*
@@ -86,7 +98,7 @@ public class HttpTestImpl implements HttpTest {
 
             };
 						
-			return httpclient.execute(httpget, responseHandler);
+			return httpclient.execute(httpget, responseHandler, httpContext);
 
 		} catch (IOException | URISyntaxException e) {
 			e.printStackTrace();
@@ -143,7 +155,7 @@ public class HttpTestImpl implements HttpTest {
 
             };
 			
-			response = (T) httpclient.execute(httppost, responseHandler);			
+			response = (T) httpclient.execute(httppost, responseHandler, httpContext);			
 
 		} catch (IOException | URISyntaxException e) {
 			LOG.error("Request Failed! {}", e.getMessage(), e);
@@ -237,7 +249,7 @@ public class HttpTestImpl implements HttpTest {
 
             };
 			
-			response = (T) httpclient.execute(httpget, responseHandler);	
+			response = (T) httpclient.execute(httpget, responseHandler, httpContext);	
 
 		} catch (IOException | URISyntaxException e) {
 			e.printStackTrace();
@@ -259,6 +271,59 @@ public class HttpTestImpl implements HttpTest {
 			uri.setParameters(urlParameters).build();
 		}
 		return uri.build();
+	}
+
+	@Override
+	public String doJsonPost(String path, Object data) {
+		String response = null;
+		CloseableHttpClient httpclient = HttpClients.createDefault();		
+		try {
+			URI uri = buildUri(path);
+			
+			HttpPost httppost = new HttpPost(uri);
+			// set the Content-type
+			httppost.setHeader("Content-type", "application/json");
+			httppost.setHeader("Accept", "application/json");
+			
+			String jsonStr = (data!=null)? mapper.writer().writeValueAsString(data) : "";			
+			LOG.debug("data: {}", jsonStr);
+			// add the JSON as a StringEntity 
+			httppost.setEntity(new StringEntity(jsonStr));					
+			
+			LOG.debug("performing JSON request: {}", httppost.getRequestLine());
+			
+			// Create a custom response handler
+			ResponseHandler<String> responseHandler = new ResponseHandler<String>() {
+				
+				public String handleResponse(
+						final HttpResponse response) throws ClientProtocolException, IOException {
+					int status = response.getStatusLine().getStatusCode();
+					if (status >= 200 && status < 300) {
+						HttpEntity entity = response.getEntity();
+						return entity != null ? EntityUtils.toString(entity) : null;
+					} else {
+						StringBuffer buffer = new StringBuffer("Unexpected response status: ");
+						buffer.append(status);
+						buffer.append(" ");
+						buffer.append(response.getStatusLine().getReasonPhrase());
+						throw new ClientProtocolException(buffer.toString());
+					}
+				}
+				
+			};
+			
+			response = httpclient.execute(httppost, responseHandler, httpContext);			
+			
+		} catch (IOException | URISyntaxException e) {
+			LOG.error("Request Failed! {}", e.getMessage(), e);
+		} finally {
+			try {
+				httpclient.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		return response;
 	}
 	
 	// helper method to convert InputStream to String
