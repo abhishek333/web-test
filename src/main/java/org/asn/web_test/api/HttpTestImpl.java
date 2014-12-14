@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.text.MessageFormat;
+import java.util.Iterator;
 import java.util.Properties;
 
 import org.apache.http.HttpEntity;
@@ -25,9 +26,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.util.EntityUtils;
+import org.asn.web_test.model.RestResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -48,7 +52,7 @@ public class HttpTestImpl implements HttpTest {
 
 	public static final HttpTest httpTest = SingletonHelper.build();
 	
-	private HttpTestImpl() {
+	public HttpTestImpl() {
 		LOG.debug("HttpTestImpl instance created.");
 		Properties httpProperties = new Properties();
 		try {
@@ -119,8 +123,8 @@ public class HttpTestImpl implements HttpTest {
 	 * 
 	 * @see org.asn.web_test.api.HttpTest#doJsonPost(java.lang.Object)
 	 */
-	public <T> T doJsonPost(String path, Object requestBody, final Class<T> entityClass) {
-		T response = null;		
+	public <T>RestResponse<T> doJsonPostRestResponse(String path, Object requestBody) {
+		RestResponse<T> response = null;		
 		try {
 			URI uri = buildUri(path);
 			
@@ -136,16 +140,24 @@ public class HttpTestImpl implements HttpTest {
 			LOG.debug("URL: {}",httppost.getRequestLine());
 			LOG.debug("Request Data: {}",jsonStr);
 			// Create a custom response handler
-            ResponseHandler<T> responseHandler = new ResponseHandler<T>() {
+            ResponseHandler<RestResponse<T>> responseHandler = new ResponseHandler<RestResponse<T>>() {
             	
-                public T handleResponse(
+                public RestResponse<T> handleResponse(
                         final HttpResponse response) throws ClientProtocolException, IOException {
                     int status = response.getStatusLine().getStatusCode();
                     if (status >= 200 && status < 300) {
                         HttpEntity entity = response.getEntity();
                         String responseReceived = entity != null ? EntityUtils.toString(entity) : null;
-                        LOG.debug("Response Data: {}",responseReceived);                        
-                        return responseReceived != null ? (T)mapper.readValue(responseReceived, entityClass) : null;
+                        LOG.debug("Response Data: {}",responseReceived);
+                        JsonNode rootNode = mapper.readTree(responseReceived);                        	
+                    	JsonNode restResponse = rootNode.get("restResponse");                        	
+                    	
+                        if(responseReceived != null && restResponse!=null){
+                        	String rest = restResponse.toString();
+                        	return (RestResponse<T>) mapper.readValue(rest, new TypeReference<RestResponse<T>>(){});
+                        }
+                          
+                        return null;
                     } else {                    	
                     	String msg = buildExpMsg(status, response.getStatusLine().getReasonPhrase());                    	
                         throw new ClientProtocolException(msg);
@@ -154,7 +166,7 @@ public class HttpTestImpl implements HttpTest {
 
             };
 			
-			response = (T) httpclient.execute(httppost, responseHandler, httpClientContext);			
+			response = (RestResponse<T>) httpclient.execute(httppost, responseHandler, httpClientContext);			
 
 		} catch (IOException | URISyntaxException e) {
 			LOG.error("Request Failed! {}", e.getMessage(), e);
