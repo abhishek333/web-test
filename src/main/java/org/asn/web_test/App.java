@@ -1,56 +1,64 @@
 package org.asn.web_test;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
-import org.apache.http.NameValuePair;
-import org.apache.http.message.BasicNameValuePair;
+import org.asn.web_test.api.HttpTest;
 import org.asn.web_test.api.HttpTestImpl;
-import org.asn.web_test.model.FormModel;
 import org.asn.web_test.model.LoginModel;
+import org.asn.web_test.model.RestResponse;
+import org.asn.web_test.model.RestResponse.REQ;
+import org.asn.web_test.model.User;
+import org.asn.web_test.model.UserRegisterationModel;
+
+import static org.junit.Assert.*;
 
 
 /**
  * Hello world!
  * 
  */
-public class App extends HttpTestImpl{
+public class App {
 	
-	public static void main(String[] args) {
-		App app = new App();
-		app.doLogin();
-		app.doLoginCheck();
+	private static HttpTest httpTest;
+	
+	public static void main(String[] args) {		
+		App app = new App();	
+		httpTest = new HttpTestImpl();
+		app.doLogin("user1", "123456");
+		List<User> users = app.getUsers();
+		System.out.println("users: "+users);
+		/*for(int i=0; i<1; i++){			
+			//app.doRegister("user"+i);
+			REQ req = app.doLogin("user"+i, "123456");
+			app.getUserList();
+			System.out.println(String.format("%d %s", i, req));
+		}*/
+		//app.doLogin();
+		//app.getUserList();
 		/*doJsonGet();
 		doPlainGet();
 		doPlainPost();*/
 	}
 	
-	public void doPlainPost() {
-		String res = doPlainPost("/plainPost", new NameValuePair[]{new BasicNameValuePair("name", "Tapu")});
-		System.out.println(res);
-	}
-	
-	public void doPlainGet() {
-		String res = doPlainGet("/plainGet", null);
-		System.out.println(res);
+	private void getUserList() {
+		httpTest.doJsonPost("/user/get/users.json",null);
 	}
 
-	public void doLogin() {
-		LoginModel loginModel = new LoginModel("abhishek", "123");
-		String res = doJsonPost("/rest/auth/login.json", loginModel);
-		System.out.println(res);
+	private void doRegister(String username) {
+		UserRegisterationModel userRegisterationModel = new UserRegisterationModel();
+		userRegisterationModel.setUserName(username);
+		userRegisterationModel.setPassword("123456");
+		httpTest.doJsonPost("/auth/register.json", userRegisterationModel);
+	}
+
+	public REQ doLogin(String username, String password) {
+		LoginModel loginModel = new LoginModel(username, password);
+		RestResponse<String> response = httpTest.doJsonPostRestResponse("/auth/login.json", loginModel);
+		return (response!=null)?response.getSuccess() : REQ.FAILED;
 	}
 	
-	public void doLoginCheck() {		
-		Map<String, String> params = new HashMap<String, String>();
-		params.put("param", "123");
-		String res = doJsonPost("/rest/auth/logincheck.json", params);
-		System.out.println(res);
+	public List<User> getUsers() {		
+		RestResponse<List<User>> response = httpTest.<List<User>>doJsonPostRestResponse("/user/get/users-rest.json", null);
+		return (response!=null)?response.getResponseContent() : null;
 	}
-	
-	public void doJsonGet() {		
-		FormModel frmMdl = doJsonGet("/jsonGet", null, FormModel.class);
-		System.out.println(frmMdl);
-	}
-	
 }
